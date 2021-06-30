@@ -2,7 +2,6 @@ package server
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/HunterGooD/webrtcGolangServer/internal/util"
 	"github.com/gin-gonic/gin"
@@ -12,7 +11,7 @@ import (
 // SFUServerConfig для конфигурации сервера
 type SFUServerConfig struct {
 	Host          string //IP
-	Port          int    //Порт
+	Port          string //Порт
 	CertFile      string //Cert
 	KeyFile       string //Key cert
 	WebSocketPath string // url path
@@ -22,7 +21,7 @@ type SFUServerConfig struct {
 func DefaultConfig() SFUServerConfig {
 	return SFUServerConfig{
 		Host:          "127.0.0.1",
-		Port:          8080,
+		Port:          "8080",
 		WebSocketPath: "/ws",
 	}
 }
@@ -69,6 +68,9 @@ func (server *SFUServer) Bind(cfg SFUServerConfig) {
 	router.Any(cfg.WebSocketPath, server.handleWebSocketRequest)
 
 	util.Infof("SFU Server listening on: %s:%d", cfg.Host, cfg.Port)
-
-	router.RunTLS(cfg.Host+":"+strconv.Itoa(cfg.Port), cfg.CertFile, cfg.KeyFile)
+	if cfg.CertFile == "" {
+		router.Run(cfg.Host + ":" + cfg.Port)
+	} else {
+		router.RunTLS(cfg.Host+":"+cfg.Port, cfg.CertFile, cfg.KeyFile)
+	}
 }
