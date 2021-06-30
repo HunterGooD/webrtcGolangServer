@@ -25,6 +25,11 @@
         }, 400);
       }
     },
+    created() {
+      if (this.src != null) {
+        this.loadSource(this.src)
+      }
+    },
     watch: {
       src: {
          handler: function(val) {

@@ -101,11 +101,11 @@ export default {
       this.sfu.on("addRemoteStream", (id, stream) => {
         // var user = new User({ id, stream, parent: "remoteVideoDiv" });
         console.log(`Remote userID ${id} connect`);
-        v.users[id] = stream;
+        v.$set(v.users, id, stream);
       });
 
       this.sfu.on("removeRemoteStream", (id, stream) => {
-        delete v.users[id];
+        v.$delete(v.users, id)
         console.log(stream);
       });
     },
