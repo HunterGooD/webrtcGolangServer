@@ -2,6 +2,7 @@ package media
 
 import (
 	"github.com/HunterGooD/webrtcGolangServer/internal/util"
+	"github.com/pion/rtcp"
 	"github.com/pion/webrtc/v3"
 )
 
@@ -57,7 +58,7 @@ func NewWebRTCEngine() *WebRTCEngine {
 	return w
 }
 
-func (s WebRTCEngine) CreateSender(offer webrtc.SessionDescription, pc **webrtc.PeerConnection, addLocalTrack **webrtc.TrackLocalStaticRTP, stop chan int) (answer webrtc.SessionDescription, err error) {
+func (s WebRTCEngine) CreateSender(offer webrtc.SessionDescription, pc **webrtc.PeerConnection, addVideoTrack, addAudioTrack **webrtc.TrackLocalStaticRTP, stop chan int) (answer webrtc.SessionDescription, err error) {
 
 	*pc, err = s.api.NewPeerConnection(s.cfg)
 	util.Infof("WebRTCEngine.CreateSender pc=%p", *pc)
@@ -65,8 +66,9 @@ func (s WebRTCEngine) CreateSender(offer webrtc.SessionDescription, pc **webrtc.
 		return webrtc.SessionDescription{}, err
 	}
 
-	if *addLocalTrack != nil {
-		(*pc).AddTrack(*addLocalTrack)
+	if *addVideoTrack != nil && *addAudioTrack != nil {
+		(*pc).AddTrack(*addVideoTrack)
+		(*pc).AddTrack(*addAudioTrack)
 		err = (*pc).SetRemoteDescription(offer)
 		if err != nil {
 			return webrtc.SessionDescription{}, err
@@ -80,7 +82,7 @@ func (s WebRTCEngine) CreateSender(offer webrtc.SessionDescription, pc **webrtc.
 
 }
 
-func (s WebRTCEngine) CreateReceiver(offer webrtc.SessionDescription, pc **webrtc.PeerConnection, localTrack **webrtc.TrackLocalStaticRTP, stop chan int, pli chan int) (answer webrtc.SessionDescription, err error) {
+func (s WebRTCEngine) CreateReceiver(offer webrtc.SessionDescription, pc **webrtc.PeerConnection, videoTrack, audioTrack **webrtc.TrackLocalStaticRTP, stop chan int, pli chan int) (answer webrtc.SessionDescription, err error) {
 
 	*pc, err = s.api.NewPeerConnection(s.cfg)
 	util.Infof("WebRTCEngine.CreateReceiver pc=%p", *pc)
@@ -100,90 +102,93 @@ func (s WebRTCEngine) CreateReceiver(offer webrtc.SessionDescription, pc **webrt
 
 	(*pc).OnTrack(func(t *webrtc.TrackRemote, _ *webrtc.RTPReceiver) {
 
-		localTrack, err := webrtc.NewTrackLocalStaticRTP(t.Codec().RTPCodecCapability, t.ID(), t.StreamID())
-		if err != nil {
-			panic(err)
-		}
+		// localTrack, err := webrtc.NewTrackLocalStaticRTP(t.Codec().RTPCodecCapability, t.ID(), t.StreamID())
+		// if err != nil {
+		// 	panic(err)
+		// }
 
-		buf := make([]byte, 1500)
-		for {
-			i, _, err := t.Read(buf)
-			if err != nil {
-				return
-			}
-
-			if _, err = localTrack.Write(buf[:i]); err != nil {
-				return
-			}
-		}
-		// //Обработка видео
-		// if remoteTrack.Codec().MimeType == webrtc.MimeTypeVP8 ||
-		// 	remoteTrack.Codec().MimeType == webrtc.MimeTypeVP9 ||
-		// 	remoteTrack.Codec().MimeType == webrtc.MimeTypeH264 {
-		// 	*videoTrack, err = webrtc.NewTrackLocalStaticRTP(webrtc.RTPCodecCapability{MimeType: remoteTrack.Codec().MimeType},  remoteTrack.ID(), remoteTrack.StreamID())
-
-		// 	go func() {
-		// 		for {
-		// 			select {
-		// 			case <-pli:
-		// 				(*pc).WriteRTCP([]rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: remoteTrack.}})
-		// 			case <-stop:
-		// 				return
-		// 			}
-		// 		}
-		// 	}()
-
-		// 	var pkt rtp.Depacketizer
-
-		// 	if remoteTrack.Codec().MimeType == webrtc.MimeTypeVP8 {
-		// 		pkt = &codecs.VP8Packet{}
-		// 	} else if remoteTrack.Codec().MimeType == webrtc.MimeTypeVP9 {
-		// 		pkt = &codecs.VP9Packet{}
-		// 	} else if remoteTrack.Codec().MimeType == webrtc.MimeTypeH264 {
-		// 		pkt = &codecs.H264Packet{}
+		// buf := make([]byte, 1500)
+		// for {
+		// 	i, _, err := t.Read(buf)
+		// 	if err != nil {
+		// 		return
 		// 	}
 
-		// 	builder := samplebuilder.New(averageRtpPacketsPerFrame*5, pkt, 16000)
-		// 	for {
-		// 		select {
-
-		// 		case <-stop:
-		// 			return
-		// 		default:
-		// 			rtp, _, err := remoteTrack.ReadRTP()
-		// 			if err != nil {
-		// 				if err == io.EOF {
-		// 					return
-		// 				}
-		// 				util.Errorf(err.Error())
-		// 			}
-
-		// 			builder.Push(rtp)
-		// 			for s := builder.Pop(); s != nil; s = builder.Pop() {
-		// 				if err := (*videoTrack).WriteSample(*s); err != nil && err != io.ErrClosedPipe {
-		// 					util.Errorf(err.Error())
-		// 				}
-		// 			}
-		// 		}
-		// 	}
-		// } else {
-		// 	*audioTrack, err = webrtc.NewTrackLocalStaticSample(remoteTrack.PayloadType(), remoteTrack.SSRC(), "audio", remoteTrack.Label())
-
-		// 	rtpBuf := make([]byte, 1400)
-		// 	for {
-		// 		select {
-		// 		case <-stop:
-		// 			return
-		// 		default:
-		// 			i, _, err := remoteTrack.Read(rtpBuf)
-		// 			if err == nil {
-		// 				(*audioTrack).WriteSample(media.Sample{Data: rtpBuf[:i]})
-		// 			} else {
-		// 				util.Infof(err.Error())
-		// 			}
-		// 		}
+		// 	if _, err = localTrack.Write(buf[:i]); err != nil {
+		// 		return
 		// 	}
 		// }
+		//Обработка видео
+		if t.Codec().MimeType == webrtc.MimeTypeVP8 ||
+			t.Codec().MimeType == webrtc.MimeTypeVP9 ||
+			t.Codec().MimeType == webrtc.MimeTypeH264 {
+			*videoTrack, err = webrtc.NewTrackLocalStaticRTP(t.Codec().RTPCodecCapability, t.ID(), t.StreamID())
+
+			go func() {
+				for {
+					select {
+					case <-pli:
+						(*pc).WriteRTCP([]rtcp.Packet{&rtcp.PictureLossIndication{
+							MediaSSRC: uint32(t.SSRC()),
+						}})
+					case <-stop:
+						return
+					}
+				}
+			}()
+
+			// var pkt rtp.Depacketizer
+
+			// if t.Codec().MimeType == webrtc.MimeTypeVP8 {
+			// 	pkt = &codecs.VP8Packet{}
+			// } else if t.Codec().MimeType == webrtc.MimeTypeVP9 {
+			// 	pkt = &codecs.VP9Packet{}
+			// } else if t.Codec().MimeType == webrtc.MimeTypeH264 {
+			// 	pkt = &codecs.H264Packet{}
+			// }
+
+			// builder := samplebuilder.New(averageRtpPacketsPerFrame*5, pkt, 16000)
+			for {
+				select {
+
+				case <-stop:
+					return
+				default:
+					rtpBuf := make([]byte, 1500)
+					i, _, err := t.Read(rtpBuf)
+					if err != nil {
+						util.Errorf(err.Error())
+						return
+					}
+					if _, err = (*videoTrack).Write(rtpBuf[:i]); err != nil {
+						return
+					}
+					// builder.Push(rtp)
+					// for s := builder.Pop(); s != nil; s = builder.Pop() {
+					// 	if err := (*videoTrack).WriteSample(*s); err != nil && err != io.ErrClosedPipe {
+					// 		util.Errorf(err.Error())
+					// 	}
+					// }
+				}
+			}
+		} else {
+			*audioTrack, err = webrtc.NewTrackLocalStaticRTP(t.Codec().RTPCodecCapability, t.ID(), t.StreamID())
+
+			rtpBuf := make([]byte, 1400)
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+					i, _, err := t.Read(rtpBuf)
+					if err == nil {
+						(*audioTrack).Write(rtpBuf[:i])
+					} else {
+						util.Infof(err.Error())
+					}
+				}
+			}
+		}
 	})
 
 	err = (*pc).SetRemoteDescription(offer)

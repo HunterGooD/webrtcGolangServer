@@ -213,11 +213,11 @@ func processSubscribe(user *User, message map[string]interface{}, roomManager *R
 		util.Infof("sdp...")
 		return
 	}
-
+	util.Infof("message %#v", j)
 	roomId := message["roomId"]
 	r := roomManager.getRoom(roomId.(string))
 	if r == nil {
-		util.Infof("room...")
+		util.Infof("room not found")
 		return
 	}
 
@@ -414,22 +414,20 @@ func (r *Room) answer(id string, pubid string, offer webrtc.SessionDescription, 
 		for {
 			select {
 			case <-ticker.C:
-				goto ENDWAIT
+				answer, err = p.AnswerReceiver(offer, &pub.VideoTrack, &pub.AudioTrack)
+				return answer, err
 			default:
-				if pub.LocalTrack == nil {
+				if pub.VideoTrack == nil || pub.AudioTrack == nil {
 					time.Sleep(time.Millisecond * 100)
 				} else {
-					goto ENDWAIT
+					answer, err = p.AnswerReceiver(offer, &pub.VideoTrack, &pub.AudioTrack)
+					return answer, err
 				}
 			}
 		}
 
-	ENDWAIT:
-		answer, err = p.AnswerReceiver(offer, &pub.LocalTrack)
-
 	}
 	return answer, err
-
 }
 
 func (r *Room) Close() {
