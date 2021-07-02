@@ -1,5 +1,6 @@
 <template>
   <v-container>
+    <a href="http://localhost:8080/web" target="_blank">New User</a>
     <div v-if="!isLogin">
       <v-text-field label="Name" v-model="userName"></v-text-field>
       <v-text-field label="RoomID" v-model="roomID"></v-text-field>
