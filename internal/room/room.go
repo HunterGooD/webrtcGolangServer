@@ -52,10 +52,10 @@ func (roomManager *RoomManager) HandleNewWebSocket(conn *server.WebSocketConn, r
 			room = roomManager.createRoom(roomId)
 		}
 
-		userId := data["userId"].(string)
-		user := room.GetUser(userId)
+		userID := data["userID"].(string)
+		user := room.GetUser(userID)
 		if user == nil {
-			user = NewUser(userId, conn)
+			user = NewUser(userID, conn)
 		}
 
 		switch request["type"] {
@@ -82,13 +82,13 @@ func (roomManager *RoomManager) HandleNewWebSocket(conn *server.WebSocketConn, r
 
 	conn.On("close", func(code int, text string) {
 		util.Infof("Closed socket %v", conn)
-		var userId string = ""
+		var userID string = ""
 		var roomId string = ""
 
 		for _, room := range roomManager.rooms {
 			for _, user := range room.users {
 				if user.conn == conn {
-					userId = user.ID()
+					userID = user.ID()
 					roomId = room.ID
 					break
 				}
@@ -99,11 +99,11 @@ func (roomManager *RoomManager) HandleNewWebSocket(conn *server.WebSocketConn, r
 			util.Errorf("не найдено комнат")
 			return
 		}
-		processLeave(roomId, userId, roomManager)
+		processLeave(roomId, userID, roomManager)
 	})
 }
 
-func processLeave(roomId, userId string, roomManager *RoomManager) {
+func processLeave(roomId, userID string, roomManager *RoomManager) {
 
 	room := roomManager.getRoom(roomId)
 	if room == nil {
@@ -111,16 +111,16 @@ func processLeave(roomId, userId string, roomManager *RoomManager) {
 	} else {
 
 		onUnpublish := make(map[string]interface{})
-		onUnpublish["pubid"] = userId
+		onUnpublish["pubID"] = userID
 
 		for id, user := range room.users {
-			if id != userId {
+			if id != userID {
 				user.sendMessage(MethodOnUnpublish, onUnpublish)
 			}
 		}
-		room.delWebRTCPeer(userId, true)
-		room.delWebRTCPeer(userId, false)
-		room.DeleteUser(userId)
+		room.delWebRTCPeer(userID, true)
+		room.delWebRTCPeer(userID, false)
+		room.DeleteUser(userID)
 	}
 }
 
@@ -143,8 +143,8 @@ func processJoin(user *User, message map[string]interface{}, roomManager *RoomMa
 	//Все соединения комнаты
 	for peerId, _ := range room.pubPeers {
 		if peerId != user.ID() {
-			onPublish["pubid"] = peerId
-			onPublish["userId"] = peerId
+			onPublish["pubID"] = peerId
+			onPublish["userID"] = peerId
 			room.GetUser(user.ID()).sendMessage(MethodOnPublish, onPublish)
 		}
 	}
@@ -185,7 +185,7 @@ func processPublish(user *User, message map[string]interface{}, roomManager *Roo
 
 	resp := make(map[string]interface{})
 	resp["jsep"] = answer
-	resp["userId"] = user.ID()
+	resp["userID"] = user.ID()
 	respByte, err := json.Marshal(resp)
 	if err != nil {
 		return
@@ -196,7 +196,7 @@ func processPublish(user *User, message map[string]interface{}, roomManager *Roo
 		user.sendMessage(MethodOnPublish, resp)
 
 		onPublish := make(map[string]interface{})
-		onPublish["pubid"] = user.ID()
+		onPublish["pubID"] = user.ID()
 		r.sendMessage(user, MethodOnPublish, resp)
 		return
 	}
@@ -226,7 +226,7 @@ func processSubscribe(user *User, message map[string]interface{}, roomManager *R
 		Type: webrtc.SDPTypeOffer,
 		SDP:  j["sdp"].(string),
 	}
-	answer, err := r.answer(user.ID(), message["pubid"].(string), jsep, false)
+	answer, err := r.answer(user.ID(), message["pubID"].(string), jsep, false)
 	if err != nil {
 		util.Errorf("Error create answer %v", err)
 		return
@@ -234,8 +234,8 @@ func processSubscribe(user *User, message map[string]interface{}, roomManager *R
 
 	resp := make(map[string]interface{})
 	resp["jsep"] = answer
-	resp["userId"] = user.ID()
-	resp["pubid"] = message["pubid"]
+	resp["userID"] = user.ID()
+	resp["pubID"] = message["pubID"]
 
 	respByte, err := json.Marshal(resp)
 	if err != nil {
@@ -302,16 +302,16 @@ func (room *Room) AddUser(newUser *User) {
 	room.users[newUser.ID()] = newUser
 }
 
-func (room *Room) GetUser(userId string) *User {
+func (room *Room) GetUser(userID string) *User {
 
-	if user, ok := room.users[userId]; ok {
+	if user, ok := room.users[userID]; ok {
 		return user
 	}
 	return nil
 }
 
-func (room *Room) DeleteUser(userId string) {
-	delete(room.users, userId)
+func (room *Room) DeleteUser(userID string) {
+	delete(room.users, userID)
 }
 
 func (room *Room) getWebRTCPeer(id string, sender bool) *media.WebRTCPeer {
@@ -397,7 +397,7 @@ func (room *Room) sendMessage(from *User, msgType string, data map[string]interf
 
 }
 
-func (r *Room) answer(id string, pubid string, offer webrtc.SessionDescription, sender bool) (webrtc.SessionDescription, error) {
+func (r *Room) answer(id string, pubID string, offer webrtc.SessionDescription, sender bool) (webrtc.SessionDescription, error) {
 
 	p := r.getWebRTCPeer(id, sender)
 
@@ -408,7 +408,7 @@ func (r *Room) answer(id string, pubid string, offer webrtc.SessionDescription, 
 	} else {
 		r.pubPeerLock.RLock()
 
-		pub := r.pubPeers[pubid]
+		pub := r.pubPeers[pubID]
 		r.pubPeerLock.RUnlock()
 		ticker := time.NewTicker(time.Millisecond * 2000)
 		for {
