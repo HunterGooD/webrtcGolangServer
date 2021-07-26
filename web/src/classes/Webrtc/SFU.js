@@ -5,11 +5,11 @@ import RTC from './RTC';
 
 export default class SFU extends EventEmitter {
 
-    constructor(userId, roomId) {
+    constructor(userID, roomId) {
         super();
         this._rtc = new RTC();
 
-        var sfuUrl = "ws://localhost:3000/ws?userId=" + userId + "&roomId=" + roomId;
+        var sfuUrl = "ws://localhost:3000/ws?uid=" + userID + "&roomId=" + roomId;
 
         this.socket = new WebSocket(sfuUrl);
 
@@ -20,7 +20,7 @@ export default class SFU extends EventEmitter {
 
         this.socket.onmessage = (e) => {
             var parseMessage = JSON.parse(e.data);
-
+            console.log(`get message  ${e.data}`);
             switch (parseMessage.type) {
                 case 'joinRoom':
                     console.log(parseMessage);
@@ -73,9 +73,9 @@ export default class SFU extends EventEmitter {
         this.emit('connect');
     }
 
-    join(userId, userName, roomId) {
+    join(userID, userName, roomId) {
         console.log('Join to [' + roomId + ']');
-        this.userId = userId;
+        this.userID = userID;
         this.userName = userName;
         this.roomId = roomId;
 
@@ -83,7 +83,7 @@ export default class SFU extends EventEmitter {
             'type': 'join',
             'data': {
                 'userName': userName,
-                'userId': userId,
+                'userID': userID,
                 'roomId': roomId,
             }
         };
@@ -91,26 +91,26 @@ export default class SFU extends EventEmitter {
 
     }
 
-    send = (data) => {
+    send (data) {
         this.socket.send(JSON.stringify(data));
     }
 
 
     publish() {
-        this._createSender(this.userId);
+        this._createSender(this.userID);
     }
 
-    async _createSender(pubid) {
+    async _createSender(pubID) {
 
         try {
-            let sender = await this._rtc.createSender(pubid);
+            let sender = await this._rtc.createSender(pubID);
             this.sender = sender;
 
             sender.pc.onicecandidate = async () => {
                 if (!sender.senderOffer) {
                     var offer = sender.pc.localDescription;
                     sender.senderOffer = true;
-                    await this.publishToServer(offer, pubid);
+                    await this.publishToServer(offer, pubID);
                 }
             }
             let desc = await sender.pc.createOffer({
@@ -125,14 +125,14 @@ export default class SFU extends EventEmitter {
 
     }
 
-    async publishToServer(offer, pubid) {
+    async publishToServer(offer, pubID) {
         let message = {
             'type': 'publish',
             'data': {
                 'jsep': offer,
-                'pubid': pubid,
+                'pubID': pubID,
                 'userName': this.userName,
-                'userId': this.userId,
+                'userID': this.userID,
                 'roomId': this.roomId,
             }
         };
@@ -140,32 +140,35 @@ export default class SFU extends EventEmitter {
     }
 
     async onPublish(message) {
-        if (this.sender && message['data']['userId'] == this.userId) {
-            console.log('onPublish:::user Id:::' + message['data']['userId']);
+        if (this.sender && message['data']['userID'] == this.userID) {
+            console.log('onPublish:::user Id:::' + message['data']['userID']);
             await this.sender.pc.setRemoteDescription(message['data']['jsep']);
         }
 
-        if (message['data']['userId'] != this.userId) {
-            console.log('onPublish:::user id:::' + message['data']['userId']);
-            await this._onRtcCreateReceiver(message['data']['userId']);
+        if (message['data']['userID'] != this.userID) {
+            if (typeof message.data === "string") {
+                message.data = JSON.parse(message.data)
+            }
+            console.log('onPublish:::user id:::' + message['data']['userID']);
+            await this._onRtcCreateReceiver(message['data']['userID']);
         }
 
     }
 
     onUnpublish(meesage) {
-        console.log('Покинул:' + meesage['data']['pubid']);
-        this._rtc.closeReceiver(meesage['data']['pubid']);
+        console.log('Покинул:' + meesage['data']['pubID']);
+        this._rtc.closeReceiver(meesage['data']['pubID']);
     }
 
-    async _onRtcCreateReceiver(pubid) {
+    async _onRtcCreateReceiver(pubID) {
         try {
-            let receiver = await this._rtc.createReciver(pubid);
+            let receiver = await this._rtc.createReciver(pubID);
 
             receiver.pc.onicecandidate = async () => {
                 if (!receiver.senderOffer) {
                     var offer = receiver.pc.localDescription;
                     receiver.senderOffer = true;
-                    await this.subscribeFromServer(offer, pubid);
+                    await this.subscribeFromServer(offer, pubID);
                 }
             }
 
@@ -178,14 +181,15 @@ export default class SFU extends EventEmitter {
     }
 
 
-    async subscribeFromServer(offer, pubid) {
+    async subscribeFromServer(offer, pubID) {
+        console.log(pubID);
         let message = {
             'type': 'subscribe',
             'data': {
                 'jsep': offer,
-                'pubid': pubid,
+                'pubID': pubID,
                 'userName': this.userName,
-                'userId': this.userId,
+                'userID': this.userID,
                 'roomId': this.roomId,
             }
         };
@@ -194,9 +198,9 @@ export default class SFU extends EventEmitter {
 
 
     onSubscribe(message) {
-        var receiver = this._rtc.getReceivers(message['data']['pubid']);
+        var receiver = this._rtc.getReceivers(message['data']['pubID']);
         if (receiver) {
-            console.log('Id:' + message['data']['pubid']);
+            console.log('Id:' + message['data']['pubID']);
             receiver.pc.setRemoteDescription(message['data']['jsep']);
         } else {
             console.log('receiver == null');
